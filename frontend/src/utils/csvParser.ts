@@ -12,6 +12,7 @@ export interface CsvLead {
   linkedinProfileUrl?: string
   isValid: boolean
   errors: string[]
+  warnings: string[]
   rowIndex: number
 }
 
@@ -20,7 +21,7 @@ export const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email)
 }
 
-export const parseCsv = (content: string): CsvLead[] => {
+export const parseCsv = (content: string, validCountryCodes: ReadonlySet<string>): CsvLead[] => {
   if (!content?.trim()) {
     throw new Error('CSV content cannot be empty')
   }
@@ -71,7 +72,7 @@ export const parseCsv = (content: string): CsvLead[] => {
           lead.jobTitle = trimmedValue || undefined
           break
         case 'countrycode':
-          lead.countryCode = trimmedValue || undefined
+          lead.countryCode = trimmedValue ? trimmedValue.toUpperCase() : undefined
           break
         case 'companyname':
           lead.companyName = trimmedValue || undefined
@@ -111,6 +112,12 @@ export const parseCsv = (content: string): CsvLead[] => {
       errors.push('Invalid email format')
     }
 
+    const warnings: string[] = []
+    if (lead.countryCode && !validCountryCodes.has(lead.countryCode)) {
+      warnings.push('invalid country code')
+      lead.countryCode = undefined
+    }
+
     data.push({
       ...lead,
       firstName: lead.firstName || '',
@@ -118,6 +125,7 @@ export const parseCsv = (content: string): CsvLead[] => {
       email: lead.email || '',
       isValid: errors.length === 0,
       errors,
+      warnings,
     } as CsvLead)
   })
 
