@@ -1,7 +1,7 @@
 # Country Code Validation for CSV Import — Design
 
 **Date:** 2026-11-02
-**Status:** Approach A chosen; pending sign-off
+**Status:** Approved as amended in review (2026-11-02)
 
 ## Intent
 
@@ -39,16 +39,15 @@ CSV imports must never store a garbage country code. Each import retrieves the a
 
 ## Decided hows
 
-- **Table:** `country_code(code TEXT PK, name TEXT)`. `name` is seeded with ISO short names purely for readability (my call — drop it if you want codes only).
+- **Table:** `country_code(country_code TEXT PK)` — the code column only, no `name` column (per review).
 - **Migration:** `prisma migrate dev` creates the table; the generated migration SQL gains `INSERT`s seeding all 249 codes (data lives with the schema migration).
 - **Endpoint:** `GET /country_codes` → `200 { "countryCodes": ["AD", "AE", ...] }` (codes only).
-- **Parser:** non-empty code is uppercased; if not in the set, a warning is added (message includes the offending value) and `countryCode` becomes `undefined`, so the import payload carries no code. Empty code stays optional and silent.
-- **Modal:** warning rows render yellow (`bg-yellow-50`, amber text) with a yellow "Warning" badge, alongside the existing green "Valid" / red "Invalid". The import summary gains a yellow "Warnings" count (my call).
+- **Parser:** non-empty code is uppercased; if it still doesn't match the approved list, the row gets a warning with helper text *"invalid country code"* and `countryCode` becomes `undefined`, so the import payload carries no code. Empty code stays optional and silent.
+- **Modal:** warning rows render yellow (`bg-yellow-50`, amber text) with a yellow "Warning" badge, alongside the existing green "Valid" / red "Invalid". When warnings exist, a notice states *"X leads will be imported without a country_code"* before the user confirms (per review — replaces the post-import toast). The import summary gains a yellow "Warnings" count (my call, kept from the reviewed draft).
 - **Bulk endpoint:** uppercases the incoming code, reads the `country_code` table once per request, stores `null` for anything not found — before any insert.
 - **Tests:** parser tests cover lowercase → uppercased valid, invalid → warning + `undefined`, empty → silent; backend gets a unit test for a small `sanitizeCountryCode` helper extracted into `backend/src/utils` (my call, keeps the express handler thin).
 
 ## Left to the builder
 
-- Exact warning copy (working text: *"Country code 'XX' is not a valid ISO code. This lead will be saved without a country code."*).
-- Minor layout details (warnings shown in the existing Errors cell, in amber).
-- Post-import toast mention of how many leads were saved without a country code (my call to include).
+- Copy is fixed by review: row helper text *"invalid country code"*; notice *"X leads will be imported without a country_code"*.
+- Minor layout details (helper text in the existing Errors cell, in amber; notice placed above the results table).
