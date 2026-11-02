@@ -23,3 +23,7 @@ model lead {
   message     String?
   emailVerified Boolean?
 }
+
+model country_code {
+  country_code String @id
+}

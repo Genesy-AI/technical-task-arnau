@@ -54,6 +54,19 @@ app.get('/leads', async (req: Request, res: Response) => {
   res.json(leads)
 })
 
+app.get('/country_codes', async (req: Request, res: Response) => {
+  try {
+    const rows = await prisma.country_code.findMany({
+      select: { country_code: true },
+      orderBy: { country_code: 'asc' },
+    })
+    res.json({ countryCodes: rows.map((row) => row.country_code) })
+  } catch (error) {
+    console.error('Error fetching country codes:', error)
+    res.status(500).json({ error: 'Failed to fetch country codes' })
+  }
+})
+
 app.patch('/leads/:id', async (req: Request, res: Response) => {
   const { id } = req.params
   const { name, email } = req.body
