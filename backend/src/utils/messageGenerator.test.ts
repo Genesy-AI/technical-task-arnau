@@ -9,6 +9,9 @@ describe('generateMessageFromTemplate', () => {
     jobTitle: 'Software Engineer',
     companyName: 'Tech Corp',
     countryCode: 'US',
+    phone: '+1-555-0100',
+    yearsAtCurrentCompany: '4',
+    linkedinProfileUrl: 'https://linkedin.com/in/john-doe',
   }
 
   const partialLead: Lead = {
@@ -45,10 +48,10 @@ describe('generateMessageFromTemplate', () => {
 
     it('should handle template with all available fields', () => {
       const template =
-        'Name: {firstName} {lastName}, Email: {email}, Job: {jobTitle} at {companyName}, Country: {countryCode}'
+        'Name: {firstName} {lastName}, Email: {email}, Job: {jobTitle} at {companyName}, Country: {countryCode}, Phone: {phone}, Years: {yearsAtCurrentCompany}, LinkedIn: {linkedinProfileUrl}'
       const result = generateMessageFromTemplate(template, fullLead)
       expect(result).toBe(
-        'Name: John Doe, Email: john.doe@example.com, Job: Software Engineer at Tech Corp, Country: US'
+        'Name: John Doe, Email: john.doe@example.com, Job: Software Engineer at Tech Corp, Country: US, Phone: +1-555-0100, Years: 4, LinkedIn: https://linkedin.com/in/john-doe'
       )
     })
 
@@ -62,6 +65,15 @@ describe('generateMessageFromTemplate', () => {
       const template = ''
       const result = generateMessageFromTemplate(template, fullLead)
       expect(result).toBe('')
+    })
+
+    it('should replace the new contact and company fields in template', () => {
+      const template =
+        'Hi {firstName}, I will call you at {phone}. You have been at {companyName} for {yearsAtCurrentCompany} years. Profile: {linkedinProfileUrl}'
+      const result = generateMessageFromTemplate(template, fullLead)
+      expect(result).toBe(
+        'Hi John, I will call you at +1-555-0100. You have been at Tech Corp for 4 years. Profile: https://linkedin.com/in/john-doe'
+      )
     })
 
     it('should handle complex message template', () => {
@@ -100,6 +112,13 @@ describe('generateMessageFromTemplate', () => {
       const template = 'Hello {firstName}, your last name is {lastName}'
       expect(() => generateMessageFromTemplate(template, minimalLead)).toThrow(
         'Missing required field: lastName'
+      )
+    })
+
+    it('should throw error when a new optional field is missing on the lead', () => {
+      const template = 'I will call you at {phone}'
+      expect(() => generateMessageFromTemplate(template, minimalLead)).toThrow(
+        'Missing required field: phone'
       )
     })
   })

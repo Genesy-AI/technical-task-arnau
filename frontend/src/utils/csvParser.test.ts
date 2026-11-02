@@ -223,4 +223,43 @@ Jane,Johnson,jane@example.com`
     expect(result[0].email).toBe('john@example.com')
     expect(result[0].isValid).toBe(true)
   })
+
+  it('should parse the new optional fields from canonical headers', () => {
+    const csv = `firstName,lastName,email,phone,years at current company,Linkedin profile URL
+John,Doe,john@example.com,+1-555-0100,4,https://linkedin.com/in/john-doe`
+
+    const result = parseCsv(csv)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].phone).toBe('+1-555-0100')
+    expect(result[0].yearsAtCurrentCompany).toBe('4')
+    expect(result[0].linkedinProfileUrl).toBe('https://linkedin.com/in/john-doe')
+    expect(result[0].isValid).toBe(true)
+  })
+
+  it('should accept the phoneNumber and yearsInRole column names used by the sample CSV files', () => {
+    const csv = `firstName,lastName,email,phoneNumber,yearsInRole
+John,Doe,john@example.com,555-1234,7`
+
+    const result = parseCsv(csv)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].phone).toBe('555-1234')
+    expect(result[0].yearsAtCurrentCompany).toBe('7')
+    expect(result[0].linkedinProfileUrl).toBeUndefined()
+    expect(result[0].isValid).toBe(true)
+  })
+
+  it('should handle empty values for the new optional fields', () => {
+    const csv = `firstName,lastName,email,phone,yearsAtCurrentCompany,linkedinProfileUrl
+John,Doe,john@example.com,,,`
+
+    const result = parseCsv(csv)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].phone).toBeUndefined()
+    expect(result[0].yearsAtCurrentCompany).toBeUndefined()
+    expect(result[0].linkedinProfileUrl).toBeUndefined()
+    expect(result[0].isValid).toBe(true)
+  })
 })

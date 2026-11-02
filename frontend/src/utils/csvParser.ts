@@ -7,6 +7,9 @@ export interface CsvLead {
   jobTitle?: string
   countryCode?: string
   companyName?: string
+  phone?: string
+  yearsAtCurrentCompany?: string
+  linkedinProfileUrl?: string
   isValid: boolean
   errors: string[]
   rowIndex: number
@@ -72,6 +75,25 @@ export const parseCsv = (content: string): CsvLead[] => {
           break
         case 'companyname':
           lead.companyName = trimmedValue || undefined
+          break
+        case 'phone':
+        case 'phonenumber':
+        case 'telephone':
+        case 'mobile':
+        case 'mobilenumber':
+          lead.phone = trimmedValue || undefined
+          break
+        // The sample CSV files use "yearsInRole" for the years-at-current-company column
+        case 'yearsatcurrentcompany':
+        case 'yearsatcompany':
+        case 'yearsinrole':
+          lead.yearsAtCurrentCompany = trimmedValue || undefined
+          break
+        case 'linkedinprofileurl':
+        case 'linkedinprofile':
+        case 'linkedinurl':
+        case 'linkedin':
+          lead.linkedinProfileUrl = trimmedValue || undefined
           break
       }
     })
