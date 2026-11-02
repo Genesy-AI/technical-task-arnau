@@ -1,0 +1,11 @@
+firstName,lastName,email,jobTitle,countryCode,companyName,yearsInRole,phone,yearsAtCurrentCompany,linkedinProfileUrl
+Lucía,Núñez,lucia.nunez@nova-iberia.com,Digital marketing manager,ES,Nova Iberia Consulting,6,+34 612 345 678,9,https://www.linkedin.com/in/lucia-nunez
+James,O'Connor,j.oconnor@thamesdigital.co.uk,"Accountant, chartered certified",GB,Thames Digital Ltd,4,+44 20 7946 0958,12,https://linkedin.com/in/james-oconnor-4a7b2c
+Lena,Hoffmann,lena.hoffmann@nordlicht-analytics.de,Data engineer,DE,Nordlicht Analytics GmbH,3,+49 30 901820,5,https://de.linkedin.com/in/lena-hoffmann
+Camille,Laurent,camille.laurent@atelier-lumiere.fr,"Research scientist, biotechnology",FR,Atelier Lumière SARL,2,+33 6 12 34 56 78,7,https://www.linkedin.com/in/camille-laurent/
+Diego,Ramírez,diego.ramirez@solmaya.mx,UX/UI designer,MX,Grupo Sol Maya,5,+52 55 1234 5678,5,https://mx.linkedin.com/in/diego-ramirez-8b3f1
+Sofía,Benítez,sofia.benitez@pampasoft.com.ar,Sales director,AR,Pampa Software S.A.,1,+54 11 4321 5678,3,https://www.linkedin.com/in/sofia-benitez
+Andrés,Castillo,andres.castillo@andesdata.co,Software development manager,CO,Andes Data SAS,8,+57 601 234 5678,15,https://co.linkedin.com/in/andres-castillo/
+Inês,Ferreira,ines.ferreira@lisboacloud.pt,Customer success specialist,PT,Lisboa Cloud Lda,4,+351 912 345 678,4,https://www.linkedin.com/in/ines-ferreira-2c9d4
+Rafael,Almeida,rafael.almeida@verdedigital.com.br,Financial analyst,BR,Verde Digital Ltda,2,+55 11 91234-5678,6,https://br.linkedin.com/in/rafael-almeida
+Maya,Thompson,maya.thompson@northwindlabs.com,Operations manager,US,"Northwind Labs, Inc.",7,+1 (415) 555-0134,11,https://www.linkedin.com/in/maya-thompson-7e1a9

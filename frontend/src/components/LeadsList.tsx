@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FC, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api'
+import { partitionLeadsForPhoneFinder, toPhoneFinderEntry } from '../utils/phoneFinder'
 import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
 
@@ -51,6 +52,23 @@ export const LeadsList: FC = () => {
     }
   })
 
+  const findPhonesMutation = useMutation({
+    mutationFn: async (input: Parameters<typeof api.leads.findPhones>[0]) =>
+      api.leads.findPhones(input),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
+      setIsEnrichDropdownOpen(false)
+      toast.success(
+        data.updatedCount === 1
+          ? `Phone number found for ${data.updatedCount} lead`
+          : `Phone numbers found for ${data.updatedCount} leads`
+      )
+    },
+    onError: () => {
+      toast.error('Failed to find phone numbers. Please try again.')
+    }
+  })
+
   const handleSelectAll = (checked: boolean) => {
     if (checked && leads.data) {
       setSelectedLeads(leads.data.map(lead => lead.id))
@@ -71,6 +89,37 @@ export const LeadsList: FC = () => {
     if (selectedLeads.length > 0) {
       deleteLeadsMutation.mutate(selectedLeads)
     }
+  }
+
+  const handlePhoneFinder = () => {
+    const selected = (leads.data ?? []).filter((lead) => selectedLeads.includes(lead.id))
+    const { leadsToFind, skippedMissingInfo, skippedWithPhone } =
+      partitionLeadsForPhoneFinder(selected)
+
+    if (skippedMissingInfo.length > 0) {
+      toast(
+        `Not verifying ${skippedMissingInfo.length} ${
+          skippedMissingInfo.length === 1 ? 'lead' : 'leads'
+        } due to missing information (last name or company name)`,
+        { icon: '⚠️' }
+      )
+    }
+
+    if (skippedWithPhone.length > 0) {
+      toast(
+        `${skippedWithPhone.length} ${
+          skippedWithPhone.length === 1 ? 'lead' : 'leads'
+        } already ${skippedWithPhone.length === 1 ? 'has' : 'have'} a phone number`,
+        { icon: 'ℹ️' }
+      )
+    }
+
+    if (leadsToFind.length === 0) {
+      setIsEnrichDropdownOpen(false)
+      return
+    }
+
+    findPhonesMutation.mutate({ leads: leadsToFind.map(toPhoneFinderEntry) })
   }
 
   const formatDate = (dateString: string) => {
@@ -170,6 +219,21 @@ export const LeadsList: FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                         Guess Gender
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEnrichDropdownOpen(false)
+                        handlePhoneFinder()
+                      }}
+                      disabled={findPhonesMutation.isPending}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        {findPhonesMutation.isPending ? 'Finding Phones...' : 'Phone Finder'}
                       </div>
                     </button>
                   </div>

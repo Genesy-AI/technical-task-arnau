@@ -240,6 +240,7 @@ git commit -m "feat(backend): normalize and validate countryCode before bulk ins
 **Interfaces:**
 - Consumes: nothing.
 - Produces: `parseCsv(content: string, validCountryCodes: ReadonlySet<string>): CsvLead[]`; `CsvLead` gains `warnings: string[]`. Rules: code is trimmed + uppercased; if non-empty and not in the set → `countryCode` becomes `undefined` and `warnings` gains the string `'invalid country code'`; `isValid` is driven by `errors` only (warnings never invalidate). Task 4 relies on all of this.
+- Scope note: the only call site (`CsvImportModal.tsx` calling `parseCsv`) is updated in Task 4, which passes the fetched set. Leave the modal untouched in this task; the transient type error there closes when Task 4 lands.
 
 - [ ] **Step 1: Update and extend the tests** in `frontend/src/utils/csvParser.test.ts`. Pass `new Set([...])` as the second argument to every existing `parseCsv(...)` call (use a set containing the codes those fixtures use, e.g. `new Set(['US'])`), and add:
 
