@@ -1,6 +1,6 @@
 import { FC, useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../api'
 import { CsvLead, parseCsv } from '../utils/csvParser'
@@ -16,6 +16,17 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
   const [isProcessing, setIsProcessing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+
+  const countryCodesQuery = useQuery({
+    queryKey: ['countryCodes', 'getMany'],
+    queryFn: () => api.countryCodes.getMany(),
+    enabled: isOpen,
+  })
+
+  const validCountryCodes = useMemo(
+    () => new Set(countryCodesQuery.data?.countryCodes ?? []),
+    [countryCodesQuery.data]
+  )
 
   const stats = useMemo(() => {
     const validLeads = csvData.filter((lead) => lead.isValid)
@@ -39,12 +50,18 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
       valid: validLeads.length,
       invalid: invalidLeads.length,
       duplicatesInCsv: duplicatesInCsv.length,
+      warnings: validLeads.filter((lead) => lead.warnings.length > 0).length,
     }
   }, [csvData])
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = useCallback((file: File) => {
     if (!file.name.endsWith('.csv')) {
       toast.error('Please select a CSV file')
+      return
+    }
+
+    if (countryCodesQuery.isPending || countryCodesQuery.isError) {
+      toast.error('Country code list unavailable. Please try again.')
       return
     }
 
@@ -53,7 +70,7 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string
-        const parsed = parseCsv(content)
+        const parsed = parseCsv(content, validCountryCodes)
         setCsvData(parsed)
         setIsProcessing(false)
       } catch (error) {
@@ -67,7 +84,7 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
       setIsProcessing(false)
     }
     reader.readAsText(file)
-  }
+  }, [countryCodesQuery.isPending, countryCodesQuery.isError, validCountryCodes])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -77,7 +94,7 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
     if (files.length > 0) {
       handleFileSelect(files[0])
     }
-  }, [])
+  }, [handleFileSelect])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -251,7 +268,7 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Import Summary</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="bg-white rounded p-3 text-center">
                     <div className="text-lg font-semibold text-gray-900">{stats.total}</div>
                     <div className="text-xs text-gray-500">Total Rows</div>
@@ -268,8 +285,18 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                     <div className="text-lg font-semibold text-yellow-600">{stats.duplicatesInCsv}</div>
                     <div className="text-xs text-gray-500">Duplicates in CSV</div>
                   </div>
+                  <div className="bg-white rounded p-3 text-center">
+                    <div className="text-lg font-semibold text-yellow-600">{stats.warnings}</div>
+                    <div className="text-xs text-gray-500">Warnings</div>
+                  </div>
                 </div>
               </div>
+
+              {stats.warnings > 0 && (
+                <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                  {stats.warnings} leads will be imported without a country_code
+                </div>
+              )}
 
               <div className="border border-gray-200 rounded-lg max-h-96 overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -289,22 +316,35 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                         Company
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Errors
+                        Issues
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {csvData.map((lead, index) => (
-                      <tr key={index} className={lead.isValid ? 'bg-white' : 'bg-red-50'}>
+                      <tr
+                        key={index}
+                        className={
+                          !lead.isValid
+                            ? 'bg-red-50'
+                            : lead.warnings.length > 0
+                              ? 'bg-yellow-50'
+                              : 'bg-white'
+                        }
+                      >
                         <td className="px-3 py-2 text-sm text-gray-900">{lead.rowIndex - 1}</td>
                         <td className="px-3 py-2">
-                          {lead.isValid ? (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
-                              Valid
-                            </span>
-                          ) : (
+                          {!lead.isValid ? (
                             <span className="inline-flex px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
                               Invalid
+                            </span>
+                          ) : lead.warnings.length > 0 ? (
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">
+                              Warning
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                              Valid
                             </span>
                           )}
                         </td>
@@ -313,7 +353,15 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                         </td>
                         <td className="px-3 py-2 text-sm text-gray-900">{lead.email || '-'}</td>
                         <td className="px-3 py-2 text-sm text-gray-900">{lead.companyName || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-red-600">{lead.errors.join(', ') || '-'}</td>
+                        <td className="px-3 py-2 text-sm">
+                          {lead.errors.length > 0 && (
+                            <div className="text-red-600">{lead.errors.join(', ')}</div>
+                          )}
+                          {lead.warnings.length > 0 && (
+                            <div className="text-amber-600">{lead.warnings.join(', ')}</div>
+                          )}
+                          {lead.errors.length === 0 && lead.warnings.length === 0 && '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
