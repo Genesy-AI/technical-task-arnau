@@ -10,6 +10,9 @@ export type LeadsGetManyOutput = {
   jobTitle: string | null
   countryCode: string | null
   companyName: string | null
+  phone: string | null
+  yearsAtCurrentCompany: string | null
+  linkedinProfileUrl: string | null
   message: string | null
   emailVerified: boolean | null
 }[]

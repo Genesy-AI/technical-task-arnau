@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { Connection, Client } from '@temporalio/client'
-import { verifyEmailWorkflow } from './workflows'
+import { verifyEmailWorkflow, findPhoneWorkflow } from './workflows'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
+import { sanitizeCountryCode } from './utils/countryCodes'
 import { runTemporalWorker } from './worker'
 const prisma = new PrismaClient()
 const app = express()
@@ -52,6 +53,19 @@ app.get('/leads', async (req: Request, res: Response) => {
   const leads = await prisma.lead.findMany()
 
   res.json(leads)
+})
+
+app.get('/country_codes', async (req: Request, res: Response) => {
+  try {
+    const rows = await prisma.country_code.findMany({
+      select: { country_code: true },
+      orderBy: { country_code: 'asc' },
+    })
+    res.json({ countryCodes: rows.map((row) => row.country_code) })
+  } catch (error) {
+    console.error('Error fetching country codes:', error)
+    res.status(500).json({ error: 'Failed to fetch country codes' })
+  }
 })
 
 app.patch('/leads/:id', async (req: Request, res: Response) => {
@@ -219,6 +233,9 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
     let importedCount = 0
     const errors: Array<{ lead: any; error: string }> = []
 
+    const countryRows = await prisma.country_code.findMany({ select: { country_code: true } })
+    const validCountryCodes = new Set(countryRows.map((row) => row.country_code))
+
     for (const lead of uniqueLeads) {
       try {
         await prisma.lead.create({
@@ -227,8 +244,13 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
             lastName: lead.lastName.trim(),
             email: lead.email.trim(),
             jobTitle: lead.jobTitle ? lead.jobTitle.trim() : null,
-            countryCode: lead.countryCode ? lead.countryCode.trim() : null,
+            countryCode: sanitizeCountryCode(lead.countryCode, validCountryCodes),
             companyName: lead.companyName ? lead.companyName.trim() : null,
+            phone: lead.phone ? lead.phone.trim() : null,
+            yearsAtCurrentCompany: lead.yearsAtCurrentCompany
+              ? lead.yearsAtCurrentCompany.trim()
+              : null,
+            linkedinProfileUrl: lead.linkedinProfileUrl ? lead.linkedinProfileUrl.trim() : null,
           },
         })
         importedCount++
@@ -310,6 +332,106 @@ app.post('/leads/verify-emails', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error verifying emails:', error)
     res.status(500).json({ error: 'Failed to verify emails' })
+  }
+})
+
+app.post('/leads/find-phones', async (req: Request, res: Response) => {
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ error: 'Request body is required and must be valid JSON' })
+  }
+
+  const { leads } = req.body as {
+    leads?: Array<{
+      id: number
+      nameSurname: string
+      companyName: string
+      email?: string | null
+      jobTitle?: string | null
+    }>
+  }
+
+  if (!Array.isArray(leads) || leads.length === 0) {
+    return res.status(400).json({ error: 'leads must be a non-empty array' })
+  }
+
+  const invalidEntries = leads.filter(
+    (lead) =>
+      !lead ||
+      typeof lead.id !== 'number' ||
+      typeof lead.nameSurname !== 'string' ||
+      !lead.nameSurname.trim() ||
+      typeof lead.companyName !== 'string' ||
+      !lead.companyName.trim()
+  )
+
+  if (invalidEntries.length > 0) {
+    return res
+      .status(400)
+      .json({ error: 'Each lead must include id, nameSurname and companyName' })
+  }
+
+  try {
+    const storedLeads = await prisma.lead.findMany({
+      where: {
+        id: {
+          in: leads.map((lead) => Number(lead.id)),
+        },
+      },
+    })
+
+    // Leads that already have a phone number are never sent to the providers
+    const candidates = storedLeads.filter((lead) => !lead.phone || !lead.phone.trim())
+
+    const connection = await Connection.connect({ address: 'localhost:7233' })
+    const client = new Client({ connection, namespace: 'default' })
+
+    let updatedCount = 0
+    const results: Array<{ leadId: number; phone: string | null }> = []
+    const errors: Array<{ leadId: number; leadName: string; error: string }> = []
+
+    try {
+      for (const lead of candidates) {
+        const input = leads.find((entry) => Number(entry.id) === lead.id)!
+
+        try {
+          const phone = await client.workflow.execute(findPhoneWorkflow, {
+            taskQueue: 'myQueue',
+            workflowId: `find-phone-${lead.id}-${Date.now()}`,
+            args: [
+              {
+                nameSurname: input.nameSurname.trim(),
+                companyName: input.companyName.trim(),
+                email: input.email ?? lead.email ?? null,
+                jobTitle: input.jobTitle ?? lead.jobTitle ?? null,
+              },
+            ],
+          })
+
+          if (phone) {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { phone },
+            })
+            updatedCount += 1
+          }
+
+          results.push({ leadId: lead.id, phone: phone ?? null })
+        } catch (error) {
+          errors.push({
+            leadId: lead.id,
+            leadName: `${lead.firstName} ${lead.lastName}`.trim(),
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+        }
+      }
+    } finally {
+      await connection.close()
+    }
+
+    res.json({ success: true, updatedCount, results, errors })
+  } catch (error) {
+    console.error('Error finding phone numbers:', error)
+    res.status(500).json({ error: 'Failed to find phone numbers' })
   }
 })
 

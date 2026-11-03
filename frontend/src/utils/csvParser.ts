@@ -7,8 +7,12 @@ export interface CsvLead {
   jobTitle?: string
   countryCode?: string
   companyName?: string
+  phone?: string
+  yearsAtCurrentCompany?: string
+  linkedinProfileUrl?: string
   isValid: boolean
   errors: string[]
+  warnings: string[]
   rowIndex: number
 }
 
@@ -17,7 +21,7 @@ export const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email)
 }
 
-export const parseCsv = (content: string): CsvLead[] => {
+export const parseCsv = (content: string, validCountryCodes: ReadonlySet<string>): CsvLead[] => {
   if (!content?.trim()) {
     throw new Error('CSV content cannot be empty')
   }
@@ -68,10 +72,29 @@ export const parseCsv = (content: string): CsvLead[] => {
           lead.jobTitle = trimmedValue || undefined
           break
         case 'countrycode':
-          lead.countryCode = trimmedValue || undefined
+          lead.countryCode = trimmedValue ? trimmedValue.toUpperCase() : undefined
           break
         case 'companyname':
           lead.companyName = trimmedValue || undefined
+          break
+        case 'phone':
+        case 'phonenumber':
+        case 'telephone':
+        case 'mobile':
+        case 'mobilenumber':
+          lead.phone = trimmedValue || undefined
+          break
+        // The sample CSV files use "yearsInRole" for the years-at-current-company column
+        case 'yearsatcurrentcompany':
+        case 'yearsatcompany':
+        case 'yearsinrole':
+          lead.yearsAtCurrentCompany = trimmedValue || undefined
+          break
+        case 'linkedinprofileurl':
+        case 'linkedinprofile':
+        case 'linkedinurl':
+        case 'linkedin':
+          lead.linkedinProfileUrl = trimmedValue || undefined
           break
       }
     })
@@ -89,6 +112,12 @@ export const parseCsv = (content: string): CsvLead[] => {
       errors.push('Invalid email format')
     }
 
+    const warnings: string[] = []
+    if (lead.countryCode && !validCountryCodes.has(lead.countryCode)) {
+      warnings.push('invalid country code')
+      lead.countryCode = undefined
+    }
+
     data.push({
       ...lead,
       firstName: lead.firstName || '',
@@ -96,6 +125,7 @@ export const parseCsv = (content: string): CsvLead[] => {
       email: lead.email || '',
       isValid: errors.length === 0,
       errors,
+      warnings,
     } as CsvLead)
   })
 

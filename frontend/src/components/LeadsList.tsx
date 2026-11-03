@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FC, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api'
+import { partitionLeadsForPhoneFinder, toPhoneFinderEntry } from '../utils/phoneFinder'
 import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
 
@@ -51,6 +52,23 @@ export const LeadsList: FC = () => {
     }
   })
 
+  const findPhonesMutation = useMutation({
+    mutationFn: async (input: Parameters<typeof api.leads.findPhones>[0]) =>
+      api.leads.findPhones(input),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
+      setIsEnrichDropdownOpen(false)
+      toast.success(
+        data.updatedCount === 1
+          ? `Phone number found for ${data.updatedCount} lead`
+          : `Phone numbers found for ${data.updatedCount} leads`
+      )
+    },
+    onError: () => {
+      toast.error('Failed to find phone numbers. Please try again.')
+    }
+  })
+
   const handleSelectAll = (checked: boolean) => {
     if (checked && leads.data) {
       setSelectedLeads(leads.data.map(lead => lead.id))
@@ -71,6 +89,37 @@ export const LeadsList: FC = () => {
     if (selectedLeads.length > 0) {
       deleteLeadsMutation.mutate(selectedLeads)
     }
+  }
+
+  const handlePhoneFinder = () => {
+    const selected = (leads.data ?? []).filter((lead) => selectedLeads.includes(lead.id))
+    const { leadsToFind, skippedMissingInfo, skippedWithPhone } =
+      partitionLeadsForPhoneFinder(selected)
+
+    if (skippedMissingInfo.length > 0) {
+      toast(
+        `Not verifying ${skippedMissingInfo.length} ${
+          skippedMissingInfo.length === 1 ? 'lead' : 'leads'
+        } due to missing information (last name or company name)`,
+        { icon: '⚠️' }
+      )
+    }
+
+    if (skippedWithPhone.length > 0) {
+      toast(
+        `${skippedWithPhone.length} ${
+          skippedWithPhone.length === 1 ? 'lead' : 'leads'
+        } already ${skippedWithPhone.length === 1 ? 'has' : 'have'} a phone number`,
+        { icon: 'ℹ️' }
+      )
+    }
+
+    if (leadsToFind.length === 0) {
+      setIsEnrichDropdownOpen(false)
+      return
+    }
+
+    findPhonesMutation.mutate({ leads: leadsToFind.map(toPhoneFinderEntry) })
   }
 
   const formatDate = (dateString: string) => {
@@ -172,6 +221,21 @@ export const LeadsList: FC = () => {
                         Guess Gender
                       </div>
                     </button>
+                    <button
+                      onClick={() => {
+                        setIsEnrichDropdownOpen(false)
+                        handlePhoneFinder()
+                      }}
+                      disabled={findPhonesMutation.isPending}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        {findPhonesMutation.isPending ? 'Finding Phones...' : 'Phone Finder'}
+                      </div>
+                    </button>
                   </div>
                 </div>
               )}
@@ -226,10 +290,16 @@ export const LeadsList: FC = () => {
                   Email
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Phone Number
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                   Job Title
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                   Company
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Years at Current Company
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                   Country
@@ -267,13 +337,38 @@ export const LeadsList: FC = () => {
                     <div className="text-sm text-gray-900">{lead.email || '-'} {lead.emailVerified === null ? '❓' : lead.emailVerified ? '✅' : '❌'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{lead.phone || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.jobTitle || '-'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.companyName || '-'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{lead.yearsAtCurrentCompany || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.countryCode || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {lead.linkedinProfileUrl ? (
+                      <a
+                        href={
+                          lead.linkedinProfileUrl.startsWith('http')
+                            ? lead.linkedinProfileUrl
+                            : `https://${lead.linkedinProfileUrl}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-600 hover:underline max-w-[160px] truncate inline-block"
+                        title={lead.linkedinProfileUrl}
+                      >
+                        {lead.linkedinProfileUrl}
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-900">-</div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900 max-w-xs truncate" title={lead.message || ''}>
